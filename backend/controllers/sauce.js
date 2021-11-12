@@ -33,11 +33,19 @@ exports.modifySauce = (req, res, next) => {
   const sauceObject = req.file ?
     {
       ...JSON.parse(req.body.sauce),
-      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
+      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}` //ajout d'une image
     } : { ...req.body };
-  Sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id })
-    .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
-    .catch(error => res.status(400).json({ error }));
+  //supprimer l'image lors de la modification et la mise à jour de la sauce
+  Sauce.findOne({ _id: req.params.id })
+    .then(sauce => {
+      const filename = sauce.imageUrl.split('/images/')[1];
+      fs.unlink(`images/${filename}`, () => {
+        Sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id })
+          .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
+          .catch(error => res.status(400).json({ error }));
+      });
+  })
+  .catch(error => res.status(500).json({ error }));
 };
 
 exports.deleteSauce = (req, res, next) => {
@@ -65,4 +73,42 @@ exports.getListOfSauces = (req, res, next) => {
       });
     }
   );
+};
+
+exports.likeOrDislikeSauce = (req, res, next) => {
+  Sauce.findById(req.params.id)
+    .then((sauce) => {
+      switch (req.body.like) {
+          //dislike
+          case -1:
+            sauce.usersDisliked.push(req.body.userId);
+            sauce.dislikes++;
+      break;
+          //like
+          case 1:
+            sauce.usersLiked.push(req.body.userId);
+            sauce.likes++;
+            break;
+          //cancel like or dislike
+          case 0:
+            if (sauce["usersLiked"].includes(req.body.userId)) {
+                  sauce["usersLiked"].splice(sauce["usersLiked"].indexOf(req.body.userId), 1);
+            } else if (sauce["usersDisliked"].includes(req.body.userId)) {
+                    sauce["usersDisliked"].splice(sauce["usersDisliked"].indexOf(req.body.userId), 1);
+              }
+            break;
+      }
+    //update number of likes and dislikes
+    sauce["dislikes"] = sauce["usersDisliked"].length;
+    sauce["likes"] = sauce["usersLiked"].length;   
+   
+    Sauce.updateOne({_id: req.params.id}, sauce)
+      .then(() => {
+        res.status(200).json({message: "Sauce modifiée !"});
+      })
+      .catch((err) => {
+        res.status(500).json({ error });
+      });
+    })
+    .catch((error) => res.status(404).json({ error }));
 };
