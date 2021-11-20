@@ -2,18 +2,26 @@ const Sauce = require('../models/Sauce');
 const fs = require('fs');
 
 exports.saveSauce = (req, res, next) => {
+  //conversion de la chaîne en objet JSON
   const sauceObject = JSON.parse(req.body.sauce);
+  //supprimer le faux_id envoyé par le front-end
   delete sauceObject._id;
+  //créer une instance du modèle sauce
   const sauce = new Sauce({
     ...sauceObject,
+    //URL complète de notre image
     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
   });
-  sauce.save()
+  //enregistrer la sauce dans la base de données
+  sauce.save() 
+    //réponse de réussite avec un code 201 (création de la ressource)
     .then(() => res.status(201).json({ message: 'Sauce enregistrée !'}))
+    //réponse avec l'erreur générée par Mongoose ainsi qu'un code d'erreur 400 (bad request)
     .catch(error => res.status(400).json({ error }));
 };
 
 exports.getOneSauce = (req, res, next) => {
+  //trouver la sauce unique ayant le même _id que le paramètre de la requête
   Sauce.findOne({
     _id: req.params.id
   }).then(
@@ -30,16 +38,19 @@ exports.getOneSauce = (req, res, next) => {
 };
 
 exports.modifySauce = (req, res, next) => {
+  //si le fichier est renseigne, le premier block, s'il n'est pas la, deuxieme block
   const sauceObject = req.file ?
     {
       ...JSON.parse(req.body.sauce),
-      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}` //ajout d'une image
+      //ajout d'une image
+      imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}` 
     } : { ...req.body };
-  //supprimer l'image lors de la modification et la mise à jour de la sauce
   Sauce.findOne({ _id: req.params.id })
     .then(sauce => {
       const filename = sauce.imageUrl.split('/images/')[1];
+      //supprimer l'image lors de la modification
       fs.unlink(`images/${filename}`, () => {
+        //mettre à jour la sauce (remplacer le premier argument par le deuxième)
         Sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id })
           .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
           .catch(error => res.status(400).json({ error }));
@@ -62,13 +73,16 @@ exports.deleteSauce = (req, res, next) => {
 };
 
 exports.getListOfSauces = (req, res, next) => {
+  //renvoyer un tableau contenant toutes les sauces dans la base de données
   Sauce.find().then(
     (sauces) => {
+      //code 200 (success)
       res.status(200).json(sauces);
     }
   ).catch(
     (error) => {
-      res.status(400).json({
+      //erreur 404 (not found)
+      res.status(404).json({
         error: error
       });
     }
@@ -89,7 +103,7 @@ exports.likeOrDislikeSauce = (req, res, next) => {
             sauce.usersLiked.push(req.body.userId);
             sauce.likes++;
             break;
-          //cancel like or dislike
+          //annuler like ou dislike
           case 0:
             if (sauce["usersLiked"].includes(req.body.userId)) {
                   sauce["usersLiked"].splice(sauce["usersLiked"].indexOf(req.body.userId), 1);
@@ -98,7 +112,7 @@ exports.likeOrDislikeSauce = (req, res, next) => {
               }
             break;
       }
-    //update number of likes and dislikes
+    //mise à jour des likes et des dislikes
     sauce["dislikes"] = sauce["usersDisliked"].length;
     sauce["likes"] = sauce["usersLiked"].length;   
    
@@ -107,8 +121,8 @@ exports.likeOrDislikeSauce = (req, res, next) => {
         res.status(200).json({message: "Sauce modifiée !"});
       })
       .catch((err) => {
-        res.status(500).json({ error });
+        res.status(400).json({ error });
       });
     })
-    .catch((error) => res.status(404).json({ error }));
+    .catch((error) => res.status(500).json({ error }));
 };
